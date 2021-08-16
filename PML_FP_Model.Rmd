@@ -38,7 +38,7 @@ The following transformations have been made to clean and prepare the data for p
 Subsequently, 30% of the the training data is partitioned into a validation set whereas the remainder is split between training (70%) and test (30%) sets. 
 
 ``` {r}
-# Separate and factorise outcome variable
+# Separate and factorize outcome variable
 train_clean<-train_raw[,-dim(train_raw)[2]]
 classe<-train_raw[,dim(train_raw)[2]]
 classe<-as.factor(classe); levels(classe)<-c(1,2,3,4,5)
@@ -48,22 +48,25 @@ classe<-as.numeric(classe)
 train_clean<-train_clean[,-c(1:7)]
 
 # Convert character variables to numeric
-cov_chr<-grep("TRUE",sapply(train_clean, function (x) {class(x)=="character"}))
-train_clean[,cov_chr] <- as.numeric(unlist(train_clean[,cov_chr]))
+chrVar<-grep("TRUE",sapply(train_clean, function (x) {class(x)=="character"}))
+train_clean[,chrVar] <- as.numeric(unlist(train_clean[,chrVar]))
 
 # Identify and remove variables with over 90% NA values
-t_na<- data.frame(sapply(train_clean, function(x) {sum(is.na(x))}))/dim(train_clean)[1]
+t_na<- data.frame(colMeans(is.na(train_clean)))
 na <- which(t_na>0.9)
 
 # Remove covariates with near zero variation
-nzv<-nearZeroVar(train_clean); 
+nzv <-nearZeroVar(train_clean[,-na])
+nzv <- names(train_clean[,-na])[nzv]
 
-# Remove covariates with high pairwise correlations
-hcv <- findCorrelation(cor(train), cutoff=0.70)
+# Remove covariates with high pair-wise correlations
+hcv <- findCorrelation(cor(train_clean[,-na]), cutoff=0.70)
+hcv <- names(train_clean[,-na])[hcv]
 
 # Recombine outcome variable
-exclude <- unique(c(nzv,hcv,na))
-train_clean <- data.frame(classe,train_clean[,-exclude])
+exclude <- unique(c(nzv,hcv,row.names(t_na)[na]))
+train_clean <- data.frame(classe,
+                          train_clean[,-which(names(train_clean)%in%exclude)])
 
 # Split data into train, test and validation sets
 set.seed (12345)
