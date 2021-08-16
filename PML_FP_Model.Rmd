@@ -1,0 +1,167 @@
+---
+title: "Activity Prediction Model from personal fitness device data"
+author: "Syed Abdullah Hasan"
+date: "8/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, cache = TRUE, 
+                      fig.align = 'center', echo = F, message = F, include = T,
+                      warning = F)
+
+```
+
+```{r Load_dependencies}
+library (caret); library (ggplot2); library (kernlab); library (Hmisc)
+library (splines); library (dplyr); library (reshape2); library (MASS)
+library (GGally); library (scales); library (kableExtra); library (corrplot)
+library (rattle)
+
+train_URL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_URL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+train_raw<- read.csv(train_URL)
+test_raw<-read.csv(test_URL)
+```
+
+# Executive Summary
+# 1. Pre-processing Methodology
+The following transformations have been made to clean and prepare the data for processing:
+1. Outcome variable is converted to a numeric factor variable with levels A-E corresponding to numbers 1-5. This will facilitate exploratory analysis and model building.
+1. Metadata variables corresponding to columns 1-7 have been removed from the data sets.
+2. Character variables other than the outcome variable are all converted to numeric format.
+3. Some variables include missing values in over 97% of observations - any variables with over 90% of values missing are excluded.
+4. Covariates with near-zero variation have been removed.
+5. Covariates with high pair-wise correlations are also removed.
+6. All remaining variables are standardized.
+
+Subsequently, 30% of the the training data is partitioned into a validation set whereas the remainder is split between training (70%) and test (30%) sets. 
+
+``` {r}
+# Separate and factorise outcome variable
+train_clean<-train_raw[,-dim(train_raw)[2]]
+classe<-train_raw[,dim(train_raw)[2]]
+classe<-as.factor(classe); levels(classe)<-c(1,2,3,4,5)
+classe<-as.numeric(classe)
+
+# Remove metadata
+train_clean<-train_clean[,-c(1:7)]
+
+# Convert character variables to numeric
+cov_chr<-grep("TRUE",sapply(train_clean, function (x) {class(x)=="character"}))
+train_clean[,cov_chr] <- as.numeric(unlist(train_clean[,cov_chr]))
+
+# Identify and remove variables with over 90% NA values
+t_na<- data.frame(sapply(train_clean, function(x) {sum(is.na(x))}))/dim(train_clean)[1]
+train_clean <- train_clean[,t_na < 0.1]
+
+# Remove co-variates with near zero variation
+nzv<-nearZeroVar(train_clean); 
+if (!length(nzv)==0) {train_clean<-train_clean[,-(nzv)]}
+
+# Recombine outcome variable
+train_clean <- data.frame(classe,train_clean)
+
+# Split data into train, test and validation sets
+inBuild <- createDataPartition(y=train_clean$classe,p=0.7,list=F)
+validation <- train_clean[-inBuild,]; buildData<- train_clean[inBuild,]
+inTrain <- createDataPartition (y=buildData$classe,p=0.7, list=F)
+train <- train_clean[inTrain,]; test<-train_clean[-inTrain,]
+```
+
+## 1.3. Outliers
+## 1.4. Skewed Variables
+## 1.5. Standardization
+## 1.7. Covariate Creation
+
+# 2. Exploratory Analysis
+## 2.1. Individual Predictors
+``` {r}
+## Histograms
+par (mfrow=c(4,2))
+lapply (1:dim(train)[2], function(x) {
+        ggplot (data=train, aes(x=train[,x], y=classe)) +
+                geom_boxplot (aes(fill=classe)) +
+                geom_jitter (position = position_jitter(0.2),
+                     alpha = 0.8, fill = "white")+
+                labs (x=names(train)[x], y="Outcome") +
+                theme (legend.position = "none")
+})
+```
+## 2.2. Correlation Plot
+``` {r, echo=F}
+## Correlation matrix
+t_data <- train; t_data$classe<-as.factor(t_data$classe)
+levels(t_data$classe) = c(1,2,3,4,5); t_data$classe<-as.numeric(t_data$classe)
+cor_mat <- cor(t_data)
+corrplot(cor_mat, order = "FPC", method = "color", type = "upper", 
+         tl.cex = 0.5, tl.col = rgb(0, 0, 0))
+```
+
+``` {r}
+hcv <- findCorrelation(cor_mat, cutoff=0.95,names=T)
+lapply(hcv, function(x){
+        ggplot (data=train, aes(x=x, y=classe)) +
+                geom_point (aes(fill=classe)) +
+                labs (x=x, y="Outcome") +
+                theme (legend.position = "none")
+})
+```
+
+## 2.3 K-Means Clustering Analysis
+``` {r}
+kmc <- kmeans(train[,-1],centers=5)
+cluster<-kmc$cluster
+qplot (cor_vars[1],cor_vars[2], data=train, colour=cluster)
+```
+## 2.4 Principal Components Analysis
+
+# 3. Model Selection Methodology
+## 3.1. Muti-variate Regression
+## 3.2. Random Forests
+## 3.3. Bagging
+## 3.4. Boosting
+## 3.5. Linear Discriminant Analysis
+## 3.6. Naive Bayes
+## 3.7. Regularized Regression
+## 3.8. Unsupervised prediction
+## 3.9. Combining Predictors
+## 3.10. Final Model
+## 3.11. In-Sample Error
+## 3.12. Out-of Sample Error
+
+\newpage 
+# Appendix
+## 1. Pre-processing
+``` {r}
+covariates<-names(train)
+features<-grep("^avg|^var|^stddev|^min|^max|^skewness|^kurtosis",
+               covariates, value=T)
+variables<-covariates[-grep("^avg|^var|^stddev|^min|^max|^skewness|^kurtosis",
+                            covariates)]
+dim (train); length (features); length (variables)
+
+t_na<- data.frame(sapply(train, function(x) {sum(is.na(x))}))
+t_na/dim(train)[1]
+prop.table (t_na)
+
+t_class <-table(sapply(train,class))
+t_class
+prop.table (t_class)
+summary (train)
+
+table(is.na(train))
+
+cov_chr<-covariates[sapply(train, function (x) {class(x)=="character"})]
+cov_num<-covariates[sapply(train, function (x) {class(x)=="numeric"})]
+cov_int<-covariates[sapply(train, function (x) {class(x)=="integer"})]
+
+colMeans(is.na(train))
+
+par (mfrow=c(7,7))
+lapply (cov_chr, function(x) {qplot(x, data=train, colour=classe,stat="count",
+                                    geom=c("histogram"))})
+```
+
+## 2. Exploratory Analysis  
+## 3. Model Selection 
