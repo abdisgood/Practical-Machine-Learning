@@ -53,16 +53,20 @@ train_clean[,cov_chr] <- as.numeric(unlist(train_clean[,cov_chr]))
 
 # Identify and remove variables with over 90% NA values
 t_na<- data.frame(sapply(train_clean, function(x) {sum(is.na(x))}))/dim(train_clean)[1]
-train_clean <- train_clean[,t_na < 0.1]
+na <- which(t_na>0.9)
 
-# Remove co-variates with near zero variation
+# Remove covariates with near zero variation
 nzv<-nearZeroVar(train_clean); 
-if (!length(nzv)==0) {train_clean<-train_clean[,-(nzv)]}
+
+# Remove covariates with high pairwise correlations
+hcv <- findCorrelation(cor(train), cutoff=0.70)
 
 # Recombine outcome variable
-train_clean <- data.frame(classe,train_clean)
+exclude <- unique(c(nzv,hcv,na))
+train_clean <- data.frame(classe,train_clean[,-exclude])
 
 # Split data into train, test and validation sets
+set.seed (12345)
 inBuild <- createDataPartition(y=train_clean$classe,p=0.7,list=F)
 validation <- train_clean[-inBuild,]; buildData<- train_clean[inBuild,]
 inTrain <- createDataPartition (y=buildData$classe,p=0.7, list=F)
@@ -77,35 +81,25 @@ train <- train_clean[inTrain,]; test<-train_clean[-inTrain,]
 # 2. Exploratory Analysis
 ## 2.1. Individual Predictors
 ``` {r}
-## Histograms
-par (mfrow=c(4,2))
+## Scatter plots
+par (mfrow=c(8,7))
 lapply (1:dim(train)[2], function(x) {
-        ggplot (data=train, aes(x=train[,x], y=classe)) +
-                geom_boxplot (aes(fill=classe)) +
-                geom_jitter (position = position_jitter(0.2),
-                     alpha = 0.8, fill = "white")+
-                labs (x=names(train)[x], y="Outcome") +
-                theme (legend.position = "none")
+        plot (train[,x],col=train$classe)
 })
 ```
 ## 2.2. Correlation Plot
 ``` {r, echo=F}
 ## Correlation matrix
-t_data <- train; t_data$classe<-as.factor(t_data$classe)
-levels(t_data$classe) = c(1,2,3,4,5); t_data$classe<-as.numeric(t_data$classe)
-cor_mat <- cor(t_data)
+cor_mat <- cor(train)
 corrplot(cor_mat, order = "FPC", method = "color", type = "upper", 
-         tl.cex = 0.5, tl.col = rgb(0, 0, 0))
+         tl.cex = 0.3, tl.col = rgb(0, 0, 0))
+
+names(train)[abs(cor_mat[1,-1])>0.15]
 ```
 
 ``` {r}
-hcv <- findCorrelation(cor_mat, cutoff=0.95,names=T)
-lapply(hcv, function(x){
-        ggplot (data=train, aes(x=x, y=classe)) +
-                geom_point (aes(fill=classe)) +
-                labs (x=x, y="Outcome") +
-                theme (legend.position = "none")
-})
+hcv <- findCorrelation(cor(train), cutoff=0.75)
+names(train)[hcv]
 ```
 
 ## 2.3 K-Means Clustering Analysis
